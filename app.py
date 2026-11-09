@@ -14,6 +14,7 @@ from datetime import datetime
 from fpdf import FPDF
 from flask import send_file
 import io
+from security_config import configure_security, server_options
 
 # Setup
 nltk.download("punkt")
@@ -25,7 +26,7 @@ stop_words = set(stopwords.words("english"))
 
 # Initialize Flask App
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "change-me-in-production")
+configure_security(app)
 
 # Load trained model
 model = load_model("fine_tuned_spam_detection_model.keras")
@@ -251,4 +252,4 @@ def download_report():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=os.getenv("FLASK_DEBUG", "false").lower() == "true")
+    app.run(**server_options())

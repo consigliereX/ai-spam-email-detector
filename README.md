@@ -53,6 +53,9 @@ This makes the repository useful both as:
 ```text
 ai-spam-email-detector/
 ├── app.py
+├── security_config.py
+├── tests/
+│   └── test_security_config.py
 ├── spam_detection.py
 ├── save_tokenizer.py
 ├── setup_nltk.py
@@ -152,15 +155,20 @@ Without them, the app cannot load the trained model/tokenizer pipeline correctly
 
 ---
 
-## Optional environment variables
+## Security configuration (local-first)
 
-For safer local deployment, you can set:
+`python app.py` now listens on **127.0.0.1:5000**, with Flask debug mode off by default.
+A missing `FLASK_SECRET_KEY` generates a fresh cryptographically random, **ephemeral**
+key. Local sessions will expire on restart. To retain sessions across restarts,
+provide a persistent, randomly generated key (at least 32 characters).
+Known placeholder and short secrets cause startup to fail instead of silently
+weakening cookie integrity.
 
 ### Linux / macOS
 
 ```bash
-export FLASK_SECRET_KEY="replace-this-with-a-strong-secret"
-export PORT=5000
+export FLASK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+export FLASK_HOST=127.0.0.1
 export FLASK_DEBUG=false
 python app.py
 ```
@@ -168,10 +176,34 @@ python app.py
 ### Windows PowerShell
 
 ```powershell
-$env:FLASK_SECRET_KEY="replace-this-with-a-strong-secret"
-$env:PORT="5000"
-$env:FLASK_DEBUG="false"
+$env:FLASK_SECRET_KEY = (python -c 'import secrets; print(secrets.token_hex(32))')
+$env:FLASK_HOST = "127.0.0.1"
+$env:FLASK_DEBUG = "false"
 python app.py
+```
+
+For a persistent deployment, save the generated key in a secure environment
+configuration, **not** in Git. If you deliberately bind to an external address
+with `FLASK_HOST=0.0.0.0`, an explicit strong `FLASK_SECRET_KEY` is required and
+`FLASK_DEBUG=true` is rejected. The built-in development server is **not** a
+production deployment method: use a production WSGI server, HTTPS, access
+controls, and a reverse proxy as appropriate.
+
+The session cookie is HTTP-only and SameSite=Lax by default. The app uses
+`FLASK_COOKIE_SECURE=false` for ordinary local HTTP; set
+`FLASK_COOKIE_SECURE=true` only when served through HTTPS. Email submission
+bodies are limited to 256 KiB. Flask's session cookie is **signed, not
+encrypted**: scanned-email previews and flagged links stored in session
+history can be decoded by the browser user. Do not paste confidential emails
+into a shared or publicly exposed instance.
+
+Supported environment variables: `FLASK_SECRET_KEY`, `FLASK_HOST`, `PORT`,
+`FLASK_DEBUG`, `FLASK_COOKIE_SECURE`.
+
+Run the configuration regression tests without TensorFlow:
+
+```bash
+python -m unittest discover -s tests -p 'test_security_config.py' -v
 ```
 
 ---
@@ -285,7 +317,7 @@ python save_tokenizer.py
 
 ## Security note
 
-Do not use the default Flask secret key in production. Set your own `FLASK_SECRET_KEY` before deployment.
+The app has no universal default secret, but an automatically generated local key is ephemeral. For persistent sessions supply a secure `FLASK_SECRET_KEY`. Never expose the Flask debugger or built-in server to the internet. The bundled `tokenizer.pkl` is a pickle: load only trusted artifacts because unpickling arbitrary files can execute code.
 
 ---
 
